@@ -1,7 +1,7 @@
 {
 	"name": "PCB Tools",
 	"description": "Handy tools to help with PCB design",
-	"version": "1.0",
+	"version": "1.0.1",
 	"icons": {
 		"default": "icon.svg",
 		"16": "icon16.png",

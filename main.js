@@ -1,3 +1,6 @@
+var selectedIDs;
+var json;
+
 //Add a button on the toolbar
 api('createToolbarButton', {
 	icon: api('getRes', {file:'icon.svg'}),
@@ -24,6 +27,15 @@ api('createCommand', {
 	'extension-tracewidth-show' : function (){
 		resetTrackWidth();
 		calculateTrackWidth();
+		selectedIDs = api('getSelectedIds').split(',');
+		json = api('getSource', {type: "json"});
+		
+		if ( hasSelectedTracks() ) {
+			$('#btnApplyTW').show();
+		} else {
+			$('#btnApplyTW').hide();
+		}
+		
 		$dlgTraceWidth.dialog('open');
 		Locale.update($dlgTraceWidth);
 	},
@@ -63,7 +75,7 @@ var $dlgTraceWidth = api('createDialog', {
 			
 			+ '<tr><td style="text-align:right" class="i18n" i18n="Required Track Width:">Required Track Width:</td>'
 			+ '<td><input type="text" class="form-input" name="trackWidth" id="reqTrackWidth" style="text-align:right" disabled /></td>'
-			+ '<td><select name="trackWidthUnit"><option value="2.54e-3" selected>mil</option><option value="0.1">mm</option><option value="1e-4">&micro;m</option></select></td></tr>'
+			+ '<td><select name="trackWidthUnit"><option value="2.54e-3" selected>mil</option><option value="0.1">mm</option></select></td></tr>'
 			
 			+ '<tr><td style="text-align:right" class="i18n" i18n="Resistance:">Resistance:</td>'
 			+ '<td><input type="text" class="form-input" name="resistance" style="text-align:right" disabled /></td>'
@@ -78,7 +90,9 @@ var $dlgTraceWidth = api('createDialog', {
 			+ '<td>W</td></tr>'
 			
 			+ '</tbody></table>'
-			+'<div style="width:90%;text-align:center"><a href="#" class="linkbutton" data-cmd="copyToClipboard" id="btnCopyTW">Copy</a></div>'
+			+ '<div style="width:90%;text-align:center"><a href="#" class="linkbutton" data-cmd="copyToClipboard" id="btnCopyTW">Copy</a>'
+			+ '<a href="#" class="linkbutton" data-cmd="applyTrackWidth" id="btnApplyTW" alt="Apply calculated track width to selected tracks">Apply to Selected</a>'
+			+ '</div>'
 			+'</div>',
 	width : 410,
 	height : 500,
@@ -103,10 +117,44 @@ var $dlgTraceWidth = api('createDialog', {
 				case 'copyToClipboard':
 					copyTWToClipboard();
 					break;
+				case 'applyTrackWidth':
+					// Apply the calculated track width to selected tracks
+					var trackWidthUnit = $dlgTraceWidth.find('[name="trackWidthUnit"]').val();
+					var trackWidth = parseFloat($dlgTraceWidth.find('[name="trackWidth"]').val());
+					trackWidth = Number((trackWidth).toFixed(3));
+					
+					var convCall;
+					var newWidth;
+					
+					if ( trackWidthUnit == "2.54e-3" ) {
+						// mils
+						// 1px = 10mil
+						newWidth = trackWidth / 10;
+					} else {
+						// mm
+						// 1px = 0.254mm
+						newWidth = trackWidth / 0.254;
+					}
+					
+					if ( selectedIDs.length ) {
+						var i;
+						
+						for( i = 0; i < selectedIDs.length; i++) {
+							tID = selectedIDs[i];
+							if ( $.inArray(tID, json.TRACK) ) {
+								json.TRACK[tID].strokeWidth = newWidth; 
+							}
+						}
+						
+						api('applySource', {source: json, createNew: false});
+					}
+					$dlgTraceWidth.dialog('close');
+					break;
 				default:
 					break;
 			}
 		}
+		
 		Locale.update($('#dlg-tracewidth-setting-items'));
 	});
 	
@@ -118,14 +166,30 @@ var $dlgTraceWidth = api('createDialog', {
 		calculateTrackWidth();
 	});
 	
+	
 	resetTrackWidth();
 	
 }());
 
+function hasSelectedTracks() {
+	
+	if ( selectedIDs.length ) {
+		var i;
+		
+		for( i = 0; i < selectedIDs.length; i++) {
+			tID = selectedIDs[i];
+			for(id in json.TRACK) {
+				if (json.TRACK.hasOwnProperty(tID) )
+					return true;
+			}
+		}
+	}
+	return false;
+}
+
 
 // 
 function copyTWToClipboard() {
-	console.log("Copying to clipboard");
 	$('#reqTrackWidth').removeAttr('disabled');
 	var eltTrackWidth = document.getElementById('reqTrackWidth');
 	
@@ -136,7 +200,6 @@ function copyTWToClipboard() {
 	eltTrackWidth.selectionEnd = eltTrackWidth.selectionStart;
 	eltTrackWidth.blur();
 	window.getSelection().removeAllRanges();
-	console.log("Copied " + eltTrackWidth.value);
 	$('#reqTrackWidth').attr('disabled', 'disabled');
 	$('#btnCopyTW').focus();
 	
